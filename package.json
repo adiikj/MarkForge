@@ -1,0 +1,19 @@
+{
+  "name": "markforge",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "pnpm --filter @markforge/frontend dev",
+    "dev:api": "pnpm --filter @markforge/backend dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  }
+}
