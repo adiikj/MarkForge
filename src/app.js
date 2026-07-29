@@ -18,8 +18,10 @@ app.use(express.static('public'));
 app.use(cookieparser());
 app.options("*", cors(corsOptions));
 
+import githubRoutes from "./routes/githubRepo.routes.js";
+app.use('/api/github', githubRoutes);
+
 // import userRouter from './routes/user.routes.js';
 // app.use('/user', userRouter);
-
 
 export {app};
