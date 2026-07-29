@@ -88,7 +88,7 @@ const fetchAllContents = async (
 };
 
 export const getRepoData = async (req: Request, res: Response) => {
-  const { username, repo } = req.params;
+  const { username, repo } = req.params as { username: string; repo: string };
 
   try {
     // 1. Recursively get all files
