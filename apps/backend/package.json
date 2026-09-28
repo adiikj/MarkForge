@@ -6,26 +6,36 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   },
   "author": "Adiikj",
   "license": "ISC",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "axios": "^1.10.0",
     "cloudinary": "^2.5.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "groq-sdk": "^1.6.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.23.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "resend": "^6.30.0",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -35,6 +45,8 @@
     "@types/mdast": "^4.0.4",
     "@types/multer": "^1.4.13",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.23.1",
+    "prisma": "7.10.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2"
   },

@@ -124,12 +124,12 @@ const DiagramEditor = () => {
             Diagram a repository
             {quota && (
               <span className="ml-auto">
-                <QuotaChip remaining={quota.remaining} limit={quota.limit} />
+                <QuotaChip quota={quota} />
               </span>
             )}
           </div>
           <RepoInput onSubmit={fromRepo} loading={loading} buttonLabel="Map it" initialValue={searchParams.get("repo") ?? ""} />
-          {quotaHit && !loading && <QuotaNotice />}
+          {quotaHit && !loading && <QuotaNotice anonymous={quota?.scope === "anonymous"} />}
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-neutral-200">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

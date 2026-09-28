@@ -21,8 +21,11 @@ const ScoreRing: FC<{ score: number; size?: number }> = ({ score, size = 136 }) 
       />
     </svg>
     <div className="absolute inset-0 flex flex-col items-center justify-center">
-      <span className="text-4xl font-semibold tabular-nums">{score}</span>
-      <span className="text-[10px] uppercase tracking-widest text-neutral-500">/ 100</span>
+      {/* Text scales with the ring; the "/ 100" caption only fits on larger rings. */}
+      <span className="font-semibold leading-none tabular-nums" style={{ fontSize: Math.round(size * 0.27) }}>
+        {score}
+      </span>
+      {size >= 96 && <span className="mt-1 text-[10px] uppercase tracking-widest text-neutral-500">/ 100</span>}
     </div>
   </div>
 );

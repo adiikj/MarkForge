@@ -199,7 +199,7 @@ const ChangelogGenerator = () => {
               <span className="text-xs text-neutral-600">· {refs.tags.length} tags</span>
               {quota && (
                 <span className="ml-auto">
-                  <QuotaChip remaining={quota.remaining} limit={quota.limit} />
+                  <QuotaChip quota={quota} />
                 </span>
               )}
             </div>
@@ -246,7 +246,7 @@ const ChangelogGenerator = () => {
             </button>
             {quotaHit && !loading && (
               <div className="mt-3">
-                <QuotaNotice />
+                <QuotaNotice anonymous={quota?.scope === "anonymous"} />
               </div>
             )}
           </div>

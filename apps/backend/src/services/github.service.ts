@@ -96,7 +96,7 @@ const toApiError = (error: unknown, fullName: string): ApiError => {
   return new ApiError(502, `GitHub request failed: ${err.response?.data?.message ?? err.message}`);
 };
 
-const fetchRaw = async (owner: string, repo: string, branch: string, path: string): Promise<string | null> => {
+export const fetchRaw = async (owner: string, repo: string, branch: string, path: string): Promise<string | null> => {
   try {
     const { data } = await axios.get<string>(
       `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${path}`,

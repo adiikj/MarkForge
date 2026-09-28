@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { recordActivity } from "../services/activity.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -49,12 +50,13 @@ export const docsPack = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "That contact email doesn't look valid.");
   }
 
-  assertQuota(req, "generate");
+  await assertQuota(req, "generate");
 
   const snapshot = await loadSnapshot(repo);
   const profile = analyzeRepo(snapshot);
   const files = generateDocsPack(profile, snapshot.paths, { contactEmail });
-  const quota = consumeQuota(req, "generate");
+  const quota = await consumeQuota(req, "generate");
+  recordActivity(req, "DOCS_PACK", snapshot.meta.fullName, { files: files.filter((f) => !f.exists).length });
 
   return res.json(new ApiResponse(200, "Docs pack generated", { repo: repoSummary(snapshot), files, quota }));
 });
@@ -77,12 +79,13 @@ export const changelog = asyncHandler(async (req: Request, res: Response) => {
   if (from != null && from !== "" && (typeof from !== "string" || !REF_RE.test(from))) {
     throw new ApiError(400, "Pick a valid 'from' tag.");
   }
-  assertQuota(req, "generate");
+  await assertQuota(req, "generate");
 
   const { owner, repo: name } = parseRepoUrl(repo);
   const { commits, truncated } = await getCommitRange(owner, name, from || null, to);
   const entries = buildChangelog(commits);
-  const quota = consumeQuota(req, "generate");
+  const quota = await consumeQuota(req, "generate");
+  recordActivity(req, "CHANGELOG", `${owner}/${name}`, { from: from || null, to, entries: entries.length });
   return res.json(
     new ApiResponse(200, "Changelog", {
       repo: { fullName: `${owner}/${name}`, htmlUrl: `https://github.com/${owner}/${name}` },
@@ -98,7 +101,7 @@ export const changelog = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /api/tools/diagram  { repo }  Architecture + folder-structure Mermaid. Counts toward the quota. */
 export const repoDiagram = asyncHandler(async (req: Request, res: Response) => {
-  assertQuota(req, "generate");
+  await assertQuota(req, "generate");
   const snapshot = await loadSnapshot(req.body?.repo);
   const profile = analyzeRepo(snapshot);
   const result = {
@@ -106,6 +109,7 @@ export const repoDiagram = asyncHandler(async (req: Request, res: Response) => {
     architecture: architectureDiagram(snapshot, profile),
     structure: structureDiagram(snapshot),
   };
-  const quota = consumeQuota(req, "generate");
+  const quota = await consumeQuota(req, "generate");
+  recordActivity(req, "DIAGRAM", snapshot.meta.fullName);
   return res.json(new ApiResponse(200, "Diagram", { ...result, quota }));
 });

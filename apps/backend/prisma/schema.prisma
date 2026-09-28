@@ -1,0 +1,166 @@
+// MarkForge data model. Run `pnpm prisma migrate dev` after changing it.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
+enum TokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum DocumentKind {
+  README
+  PROFILE
+  DOCS
+  CHANGELOG
+  OTHER
+}
+
+enum ActivityType {
+  README_DRAFT
+  AI_DRAFT
+  AI_REVISE
+  DOCS_PACK
+  CHANGELOG
+  DIAGRAM
+  HEALTH_CHECK
+  DOCUMENT_SAVED
+  REPO_TRACKED
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  username        String    @unique
+  name            String?
+  avatarUrl       String?
+  /// scrypt hash; null for accounts that only sign in with GitHub.
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  githubId        String?   @unique
+  githubLogin     String?
+  plan            Plan      @default(FREE)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions  Session[]
+  tokens    AuthToken[]
+  documents Document[]
+  repos     TrackedRepo[]
+  activity  Activity[]
+  usage     UsageDay[]
+}
+
+/// One row per signed-in device. Holds the hash of the rotating refresh token.
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  /// Hash of the refresh token this one replaced; presenting it again signals token theft.
+  prevTokenHash String? @unique
+  rotatedAt  DateTime?
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+/// Single-use email verification and password-reset tokens (stored hashed).
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
+}
+
+/// Markdown saved from the Studio, synced across devices.
+model Document {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  kind      DocumentKind @default(README)
+  repo      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model TrackedRepo {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  htmlUrl       String
+  description   String?
+  lastScore     Int?
+  lastGrade     String?
+  lastCheckedAt DateTime?
+  createdAt     DateTime      @default(now())
+  checks        HealthCheck[]
+
+  @@unique([userId, fullName])
+}
+
+model HealthCheck {
+  id        String      @id @default(cuid())
+  repoId    String
+  repo      TrackedRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  score     Int
+  grade     String
+  failing   Int
+  createdAt DateTime    @default(now())
+
+  @@index([repoId, createdAt])
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ActivityType
+  repo      String?
+  /// Small, display-only details (e.g. score, file count).
+  meta      Json?
+  createdAt DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Per-user daily usage counters for plan limits.
+model UsageDay {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    String // YYYY-MM-DD (UTC)
+  kind   String
+  count  Int    @default(0)
+
+  @@id([userId, day, kind])
+}

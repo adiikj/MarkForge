@@ -1,16 +1,13 @@
-import { DB_NAME } from "../constants.js";
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-dotenv.config();
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.js";
 
-const connectDB = async (): Promise<void> => {
-  try {
-    const connectionInstance = await mongoose.connect(`${process.env.MONGODB_URI}/${DB_NAME}`);
-    console.log(`Connected to the MongoDB ${connectionInstance.connection.host}`);
-  } catch (error) {
-    console.error("Error in connecting to the database");
-    throw error;
-  }
-};
+// One client (and connection pool) per process; reused across tsx watch reloads in dev.
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export default connectDB;
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+export const dbEnabled = () => Boolean(process.env.DATABASE_URL);

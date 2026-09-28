@@ -1,73 +1,56 @@
+import type { NextFunction, Request, Response } from "express";
+import { prisma } from "../db/index.js";
+import type { User } from "../generated/prisma/client.js";
 import { ApiError } from "../utils/ApiError.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
-import jwt from "jsonwebtoken";
-import { User, type IUser } from "../models/user.models.js";
+import { ACCESS_COOKIE } from "../utils/cookies.js";
+import { verifyAccessToken } from "../utils/tokens.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      user?: IUser | null;
-      cookies: Record<string, string>;
+      user?: User | null;
+      sessionId?: string | null;
+      /** Set when the access token was present but expired, so requireAuth can say so. */
+      authExpired?: boolean;
     }
   }
 }
 
-export const verifyJWT = asyncHandler(async (req, res, next) => {
-  //res use nhi huya hai toh uski jagah _ use kr skte hai production grade code ke liye
+/**
+ * Runs on every request: attaches req.user when a valid access token is present.
+ * Never rejects; routes that need a user add requireAuth.
+ */
+export const attachUser = async (req: Request, _res: Response, next: NextFunction) => {
+  req.user = null;
+  req.sessionId = null;
+  const token = req.cookies?.[ACCESS_COOKIE] || req.get("authorization")?.replace(/^Bearer /i, "");
+  if (!token || !process.env.DATABASE_URL) return next();
+
+  const payload = verifyAccessToken(token);
+  if (payload === "expired") {
+    req.authExpired = true;
+    return next();
+  }
+  if (!payload) return next();
   try {
-    const token =
-      req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
-
-    if (!token) {
-      new ApiError(401, "Unauthorized");
+    // Checking the session makes logout / "sign out other devices" take effect immediately.
+    const session = await prisma.session.findUnique({ where: { id: payload.sid }, include: { user: true } });
+    if (session && !session.revokedAt && session.userId === payload.sub) {
+      req.user = session.user;
+      req.sessionId = session.id;
     }
-
-    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET as string) as {
-      _id: string;
-    };
-    const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
-
-    if (!user) {
-      //discuss about frontend
-      throw new ApiError(404, "Invalid Access Token");
-    }
-
-    req.user = user;
     next();
-  } catch (error) {
-    throw new ApiError(401, "Invalid Access Token");
+  } catch (err) {
+    next(err);
   }
-});
+};
 
-export const optionalVerifyJWT = asyncHandler(async (req, _res, next) => {
-  try {
-    // Retrieve token from cookies or headers
-    const token =
-      req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
-
-    if (!token) {
-      req.user = null; // If no token, set user to null for unauthenticated access
-      return next(); // Proceed without throwing an error
-    }
-
-    // Verify the token
-    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET as string) as {
-      _id: string;
-    };
-
-    // Find the user associated with the token
-    const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
-
-    if (!user) {
-      throw new ApiError(404, "Invalid Access Token");
-    }
-
-    req.user = user; // Attach user details to the request
-    next(); // Continue to the next middleware or route handler
-  } catch (error) {
-    // If token verification fails, allow unauthenticated access
-    req.user = null;
-    next(); // Do not throw an error, continue processing the request
-  }
-});
+export const requireAuth = (req: Request, _res: Response, next: NextFunction) => {
+  if (req.user) return next();
+  next(
+    req.authExpired
+      ? new ApiError(401, "Your session expired.", [{ code: "TOKEN_EXPIRED" }])
+      : new ApiError(401, "Please log in to continue.", [{ code: "UNAUTHENTICATED" }])
+  );
+};

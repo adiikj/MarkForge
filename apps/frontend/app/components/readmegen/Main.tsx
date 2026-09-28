@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Check,
+  CloudUpload,
   Columns2,
+  Loader2,
   Copy,
   Download,
   Eye,
@@ -14,7 +16,10 @@ import {
   LayoutGrid,
   PencilLine,
   Sparkles,
+  Square,
+  Wand2,
   X,
+  Zap,
 } from "lucide-react";
 import Preview from "./Preview";
 import Editor from "./Editor";
@@ -27,6 +32,10 @@ import {
   generateReadme,
   getQuota,
   getRepoProfile,
+  getAiStatus,
+  streamAiReadme,
+  unwrapMarkdownFence,
+  type AiStatus,
   type GenerateResult,
   type QuotaStatus,
   type RepoProfile,
@@ -34,6 +43,9 @@ import {
 import type { Block } from "../../lib/blocks";
 import { sendHandoff, takeHandoff } from "../../lib/handoff";
 import { applyOp } from "../../lib/applyFix";
+import { useAuth } from "../../lib/auth";
+import { dashboardApi } from "../../lib/account";
+import { useToast } from "../../lib/toast";
 
 const DRAFT_KEY = "markforge:draft";
 const LOADING_STEPS = ["Reading repository…", "Detecting the stack…", "Drafting sections…"];
@@ -44,6 +56,8 @@ interface Draft {
   markdown: string;
   label: string;
   repo: string | null;
+  /** Set when the draft is a saved document, so unsaved edits survive a refresh. */
+  docId?: string | null;
 }
 
 const loadDraft = (): Draft | null => {
@@ -75,6 +89,21 @@ const Main = () => {
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [blocksOpen, setBlocksOpen] = useState(false);
+  const [ai, setAi] = useState<AiStatus | null>(null);
+  const [draftMode, setDraftMode] = useState<"ai" | "quick">("ai");
+  // null = idle; "reading" until the first token arrives, then "writing".
+  const [aiPhase, setAiPhase] = useState<null | "reading" | "writing">(null);
+  const [refineText, setRefineText] = useState("");
+  const aiAbort = useRef<AbortController | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const toast = useToast();
+  // Cloud save: the document this draft belongs to, and the content last saved to it.
+  const [docId, setDocId] = useState<string | null>(null);
+  const [savedContent, setSavedContent] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // State updates are async, so a double-click or key repeat could start two saves (and create
+  // two documents); this ref blocks re-entry synchronously.
+  const savingRef = useRef(false);
   const [profile, setProfile] = useState<RepoProfile | null>(null);
   // Until the user places the caret, blocks go at the end rather than position 0.
   const caretTouched = useRef(false);
@@ -96,6 +125,7 @@ const Main = () => {
     try {
       const result = await generateReadme(input);
       load(result.markdown, result.repo.fullName, result.repo.fullName);
+      setDocId(null);
       setDetected(result.detected);
       setQuota(result.quota);
       router.replace(`/generate?repo=${encodeURIComponent(result.repo.fullName)}`, { scroll: false });
@@ -112,12 +142,86 @@ const Main = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, dirty]);
 
+  const handleQuotaOrError = (err: unknown) => {
+    if (err instanceof ApiRequestError && err.code === "QUOTA_EXCEEDED") {
+      setQuotaHit(true);
+      setQuota((q) => (q ? { ...q, remaining: 0 } : q));
+    } else {
+      setError((err as Error).message);
+    }
+  };
+
+  /** Streams an AI draft (or a revision of the current one) into the editor. */
+  const runAi = async (input: { repo: string; instruction?: string }) => {
+    const refining = input.instruction !== undefined;
+    if (!refining && !confirmReplace()) return;
+    const before = content;
+    const beforeLabel = label;
+    const controller = new AbortController();
+    aiAbort.current = controller;
+    setError(null);
+    setAiPhase("reading");
+    let text = "";
+    try {
+      await streamAiReadme(
+        refining ? { repo: input.repo, current: before, instruction: input.instruction } : { repo: input.repo },
+        {
+          onMeta: (meta) => {
+            if (!refining) {
+              setDocId(null);
+              setLabel(meta.repo.fullName);
+              setRepo(meta.repo.fullName);
+              setDetected(null);
+              router.replace(`/generate?repo=${encodeURIComponent(meta.repo.fullName)}`, { scroll: false });
+            }
+          },
+          onDelta: (delta) => {
+            if (!text) setAiPhase("writing");
+            text += delta;
+            setContent(text);
+          },
+          onDone: (done) => {
+            setQuota(done.quota);
+            if (done.truncated) setError("The AI hit its length limit, so the end may be cut off.");
+          },
+        },
+        controller.signal
+      );
+      if (controller.signal.aborted) {
+        // Stopped: keep what was written if it's a fresh draft; restore the original on a revision.
+        if (refining || !text) setContent(before);
+        return;
+      }
+      if (!text.trim()) {
+        setContent(before);
+        setLabel(beforeLabel);
+        setError("The AI returned an empty draft. Try again.");
+        return;
+      }
+      const final = unwrapMarkdownFence(text);
+      setContent(final);
+      if (!refining) setBaseline(final);
+      setRefineText("");
+    } catch (err) {
+      setContent(before);
+      setLabel(beforeLabel);
+      handleQuotaOrError(err);
+    } finally {
+      setAiPhase(null);
+      aiAbort.current = null;
+    }
+  };
+
+  const stopAi = () => aiAbort.current?.abort();
+
   // Initial content: handoff from /health > ?repo= > saved draft > default template.
   useEffect(() => {
     const handoff = takeHandoff();
     const repoParam = searchParams.get("repo");
     const draft = loadDraft();
-    if (handoff && "markdown" in handoff) {
+    if (searchParams.get("doc") && !handoff) {
+      // Loaded from the account once auth is known (effect below).
+    } else if (handoff && "markdown" in handoff) {
       load(handoff.markdown, handoff.label ?? "README.md", handoff.repo ?? null);
     } else if (handoff && "append" in handoff) {
       const base = draft?.markdown ?? "";
@@ -141,10 +245,15 @@ const Main = () => {
       setBaseline(draft.markdown);
       setLabel(draft.label);
       setRepo(draft.repo);
+      setDocId(draft.docId ?? null);
     } else {
       load(templates[0].content, `${templates[0].name} template`);
     }
     if (searchParams.get("blocks")) setBlocksOpen(true);
+    getAiStatus().then((s) => {
+      setAi(s);
+      if (!s?.enabled) setDraftMode("quick");
+    });
     setReady(true);
     getQuota().then((q) => {
       if (!q) return;
@@ -159,19 +268,82 @@ const Main = () => {
     if (!ready) return;
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ markdown: content, label, repo } satisfies Draft));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ markdown: content, label, repo, docId } satisfies Draft));
       } catch {
         /* storage unavailable */
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [content, label, repo, ready]);
+  }, [content, label, repo, docId, ready]);
 
   useEffect(() => {
     if (!loading) return setLoadingStep(0);
     const t = setInterval(() => setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1)), 900);
     return () => clearInterval(t);
   }, [loading]);
+
+  // Open a saved document (?doc=<id>) once we know who's signed in.
+  const docParam = searchParams.get("doc");
+  useEffect(() => {
+    if (!docParam || authLoading) return;
+    if (!user) {
+      toast("Log in to open your saved documents.", "error");
+      router.replace(`/login?next=${encodeURIComponent(`/generate?doc=${docParam}`)}`);
+      return;
+    }
+    dashboardApi
+      .document(docParam)
+      .then(({ document }) => {
+        const draft = loadDraft();
+        // Unsaved local edits to this same document win over the server copy.
+        const local = draft?.docId === document.id && draft.markdown !== document.content ? draft.markdown : null;
+        setContent(local ?? document.content);
+        setBaseline(document.content);
+        setLabel(document.title);
+        setRepo(document.repo);
+        setDocId(document.id);
+        setSavedContent(document.content);
+        if (local) toast("Restored your unsaved changes to this document.");
+      })
+      .catch((err) => {
+        toast((err as Error).message, "error");
+        router.replace("/generate");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docParam, authLoading, user]);
+
+  const unsaved = docId ? content !== savedContent : Boolean(content.trim());
+
+  const save = useCallback(async () => {
+    if (!user) {
+      toast("Log in to save. Your draft stays here in the meantime.");
+      router.push(`/login?next=${encodeURIComponent("/generate")}`);
+      return;
+    }
+    if (!content.trim() || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const title = label.replace(/ template$/, "").trim() || "Untitled";
+      if (docId) {
+        await dashboardApi.updateDocument(docId, { content, title });
+      } else {
+        const kind = /^(Classic|Minimal|Dev Card)$/.test(title) ? "PROFILE" : "README";
+        const { document } = await dashboardApi.createDocument({ title, content, kind, repo });
+        setDocId(document.id);
+        setLabel(document.title);
+        router.replace(`/generate?doc=${document.id}`, { scroll: false });
+      }
+      setSavedContent(content);
+      setBaseline(content);
+      toast(docId ? "Saved." : "Saved to your documents.");
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [user, content, label, docId, repo, router, toast]);
 
   const download = useCallback(() => {
     const url = URL.createObjectURL(new Blob([content], { type: "text/markdown" }));
@@ -184,12 +356,13 @@ const Main = () => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        download();
+        if (user) save();
+        else download();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [download]);
+  }, [download, save, user]);
 
   const copy = async () => {
     try {
@@ -204,6 +377,7 @@ const Main = () => {
   const pickTemplate = (t: Template) => {
     if (!confirmReplace()) return;
     load(t.content, `${t.name} template`);
+    setDocId(null);
     setDetected(null);
     setError(null);
     router.replace("/generate", { scroll: false });
@@ -291,13 +465,43 @@ const Main = () => {
               <Sparkles className="h-4 w-4 text-neutral-400" /> From a repository
               {quota && (
                 <span className="ml-auto">
-                  <QuotaChip remaining={quota.remaining} limit={quota.limit} />
+                  <QuotaChip quota={quota} />
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs text-neutral-500">Reads package files, scripts, env vars and structure. Public repos only.</p>
-            <div className="mt-4">
-              <RepoInput onSubmit={(r) => forge(r)} loading={loading} buttonLabel="Forge" initialValue={searchParams.get("repo") ?? ""} />
+            <p className="mt-1 text-xs text-neutral-500">
+              {draftMode === "ai"
+                ? "AI reads the code and writes a complete README, grounded in the repo's real commands. Public repos only."
+                : "Reads package files, scripts, env vars and structure, and leaves TODOs for you. Public repos only."}
+            </p>
+            <div className="mt-4 inline-flex rounded-lg border border-white/10 p-0.5">
+              {([
+                ["ai", Wand2, "AI draft"],
+                ["quick", Zap, "Quick draft"],
+              ] as const).map(([mode, Icon, text]) => {
+                const disabled = mode === "ai" && ai !== null && !ai.enabled;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setDraftMode(mode)}
+                    disabled={disabled}
+                    title={disabled ? "AI isn't configured on this server" : undefined}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      draftMode === mode ? "bg-white text-black" : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {text}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3">
+              <RepoInput
+                onSubmit={(r) => (draftMode === "ai" ? runAi({ repo: r }) : forge(r))}
+                loading={loading || aiPhase !== null}
+                buttonLabel={draftMode === "ai" ? "Write it" : "Forge"}
+                initialValue={searchParams.get("repo") ?? ""}
+              />
             </div>
             {loading && (
               <p className="mt-3 flex items-center gap-2 font-mono text-xs text-neutral-400">
@@ -307,7 +511,7 @@ const Main = () => {
             )}
             {quotaHit && !loading && (
               <div className="mt-3">
-                <QuotaNotice />
+                <QuotaNotice anonymous={quota?.scope === "anonymous"} />
               </div>
             )}
             {error && (
@@ -368,6 +572,34 @@ const Main = () => {
           </div>
         </div>
 
+        {/* AI revise bar */}
+        {ai?.enabled && repo && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (refineText.trim() && !aiPhase) runAi({ repo, instruction: refineText.trim() });
+            }}
+            className="mt-6 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0a0a0a] p-1.5 pl-4 focus-within:border-white/25"
+          >
+            <Wand2 className="h-4 w-4 shrink-0 text-neutral-500" />
+            <input
+              value={refineText}
+              onChange={(e) => setRefineText(e.target.value)}
+              maxLength={500}
+              disabled={aiPhase !== null}
+              placeholder="Ask AI to revise: “make it shorter”, “add a FAQ”, “friendlier tone”…"
+              className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-neutral-600 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!refineText.trim() || aiPhase !== null}
+              className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-200 disabled:opacity-40"
+            >
+              Revise
+            </button>
+          </form>
+        )}
+
         {/* Workspace */}
         <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl shadow-black">
           {/* Toolbar */}
@@ -376,6 +608,18 @@ const Main = () => {
               <FileText className="h-4 w-4 shrink-0 text-neutral-500" />
               <span className="truncate font-mono text-xs text-neutral-300">{label}</span>
               {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400" title="Edited" />}
+              {aiPhase && (
+                <span className="ml-2 flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] py-0.5 pl-2.5 pr-1 text-[11px] text-neutral-200">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                  {aiPhase === "reading" ? "Reading the code…" : "Writing…"}
+                  <button
+                    onClick={stopAi}
+                    className="flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-black hover:bg-neutral-200"
+                  >
+                    <Square className="h-2.5 w-2.5 fill-current" /> Stop
+                  </button>
+                </span>
+              )}
             </div>
 
             <div className="flex rounded-lg border border-white/10 p-0.5 sm:ml-auto">
@@ -401,6 +645,21 @@ const Main = () => {
                 }`}
               >
                 <LayoutGrid className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Blocks</span>
+              </button>
+              <button
+                onClick={save}
+                disabled={saving || (Boolean(docId) && !unsaved)}
+                title={user ? (docId ? "Save changes (⌘/Ctrl S)" : "Save to your documents (⌘/Ctrl S)") : "Log in to save"}
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-white/25 hover:text-white disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : docId && !unsaved ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <CloudUpload className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">{docId && !unsaved ? "Saved" : "Save"}</span>
               </button>
               <button
                 onClick={checkHealth}
@@ -466,11 +725,11 @@ const Main = () => {
               </div>
             </div>
 
-            {loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            {(loading || aiPhase === "reading") && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                 <p className="flex items-center gap-2 font-mono text-sm text-neutral-300">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-                  {LOADING_STEPS[loadingStep]}
+                  {aiPhase === "reading" ? "Reading the code and planning the README…" : LOADING_STEPS[loadingStep]}
                 </p>
               </div>
             )}
@@ -485,7 +744,7 @@ const Main = () => {
             <span className="ml-auto">
               {lineCount} lines · {words} words
             </span>
-            <span className="hidden sm:inline">⌘/Ctrl S to download</span>
+            <span className="hidden sm:inline">⌘/Ctrl S to {user ? "save" : "download"}</span>
           </div>
         </div>
       </div>

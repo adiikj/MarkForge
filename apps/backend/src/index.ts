@@ -2,21 +2,6 @@
 import "dotenv/config";
 import { app } from "./app.js";
 
-// connectDB().then(()=>{
-//     app.on("error",()=>{
-//         console.error("Error in starting the server");
-//         throw error;
-//     });
-
-//     app.listen(process.env.PORT,()=>{
-//         console.log(`Server is running on port ${process.env.PORT}`);
-//     });
-// })
-// .catch((error)=>{
-//     console.error("Error in connecting to the database");
-//     throw error;
-// });
-
 // Defaults to 8000, which is where the frontend looks when NEXT_PUBLIC_API_URL is unset.
 const port = Number(process.env.PORT) || 8000;
 

@@ -154,3 +154,82 @@ body {
 }
 
 .mermaid-svg svg { max-width: 100%; height: auto; }
+
+/* ---------- Landing: slow-moving monochrome gradient ---------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #050505;
+}
+.aurora__blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(110px);
+  will-change: transform;
+}
+.aurora__blob--1 {
+  width: 60vmax;
+  height: 60vmax;
+  left: -15vmax;
+  top: -25vmax;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.16), transparent 65%);
+  animation: aurora-drift-1 26s ease-in-out infinite alternate;
+}
+.aurora__blob--2 {
+  width: 50vmax;
+  height: 50vmax;
+  right: -20vmax;
+  top: 10vh;
+  background: radial-gradient(circle, rgb(163 163 163 / 0.14), transparent 65%);
+  animation: aurora-drift-2 32s ease-in-out infinite alternate;
+}
+.aurora__blob--3 {
+  width: 55vmax;
+  height: 55vmax;
+  left: 20vw;
+  bottom: -35vmax;
+  background: radial-gradient(circle, rgb(229 229 229 / 0.10), transparent 65%);
+  animation: aurora-drift-3 38s ease-in-out infinite alternate;
+}
+.aurora__blob--4 {
+  width: 30vmax;
+  height: 30vmax;
+  left: 45vw;
+  top: 25vh;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.07), transparent 70%);
+  animation: aurora-drift-2 22s ease-in-out infinite alternate-reverse;
+}
+/* Edge falloff keeps the page reading as black. */
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 40%, #050505 100%);
+}
+/* Fine grain stops large gradients from banding. */
+.aurora::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes aurora-drift-1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(18vw, 12vh, 0) scale(1.15); }
+  100% { transform: translate3d(6vw, 28vh, 0) scale(0.95); }
+}
+@keyframes aurora-drift-2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-16vw, 18vh, 0) scale(0.9); }
+  100% { transform: translate3d(-28vw, -6vh, 0) scale(1.1); }
+}
+@keyframes aurora-drift-3 {
+  0% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-12vw, -20vh, 0) scale(0.95); }
+  100% { transform: translate3d(14vw, -10vh, 0) scale(1.15); }
+}

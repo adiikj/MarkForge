@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { recordActivity } from "../services/activity.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -13,18 +14,19 @@ const MAX_MARKDOWN_CHARS = 200_000;
 
 /** GET /api/readme/quota */
 export const quotaStatus = asyncHandler(async (req: Request, res: Response) => {
-  return res.json(new ApiResponse(200, "Quota", { generate: getQuota(req, "generate") }));
+  return res.json(new ApiResponse(200, "Quota", { generate: await getQuota(req, "generate") }));
 });
 
 /** POST /api/readme/generate  { repo } */
 export const generateFromRepo = asyncHandler(async (req: Request, res: Response) => {
-  assertQuota(req, "generate");
+  await assertQuota(req, "generate");
 
   const snapshot = await loadSnapshot(req.body?.repo);
   const profile = analyzeRepo(snapshot);
   const markdown = generateReadme(profile);
   // Only successful generations count against the free tier.
-  const quota = consumeQuota(req, "generate");
+  const quota = await consumeQuota(req, "generate");
+  recordActivity(req, "README_DRAFT", snapshot.meta.fullName, { ecosystem: profile.ecosystem });
 
   return res.json(
     new ApiResponse(200, "README generated", {
@@ -83,6 +85,7 @@ export const checkHealth = asyncHandler(async (req: Request, res: Response) => {
     kind: isProfileRepo ? "profile" : "project",
   });
 
+  if (typeof markdown !== "string") recordActivity(req, "HEALTH_CHECK", snapshot.meta.fullName, { score: report.score, grade: report.grade });
   return res.json(
     new ApiResponse(200, "Checked", {
       source: "repo",

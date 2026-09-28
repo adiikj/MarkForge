@@ -134,7 +134,7 @@ const DocsPack = () => {
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-600"
               />
             </label>
-            {quota && <QuotaChip remaining={quota.remaining} limit={quota.limit} />}
+            {quota && <QuotaChip quota={quota} />}
           </div>
           {loading && (
             <p className="flex items-center gap-2 font-mono text-xs text-neutral-400">
@@ -142,7 +142,7 @@ const DocsPack = () => {
               {LOADING_STEPS[loadingStep]}
             </p>
           )}
-          {quotaHit && !loading && <QuotaNotice />}
+          {quotaHit && !loading && <QuotaNotice anonymous={quota?.scope === "anonymous"} />}
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-neutral-200">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

@@ -22,6 +22,9 @@ import ScoreRing from "./ScoreRing";
 import { checkHealth, type Check as HealthCheck, type CheckCategory, type HealthResult } from "../../lib/api";
 import { applyFix } from "../../lib/applyFix";
 import { sendHandoff, takeHandoff } from "../../lib/handoff";
+import { useAuth } from "../../lib/auth";
+import { dashboardApi } from "../../lib/account";
+import { useToast } from "../../lib/toast";
 
 type Mode = "repo" | "paste";
 type Kind = "project" | "profile";
@@ -72,8 +75,28 @@ const HealthChecker = () => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState<string | null>(null);
+  const { user } = useAuth();
+  const toast = useToast();
+  const [tracking, setTracking] = useState<"idle" | "busy" | "done">("idle");
 
   const repoName = result?.repo?.fullName;
+
+  const track = async () => {
+    if (!repoName) return;
+    setTracking("busy");
+    try {
+      await dashboardApi.trackRepo(repoName);
+      setTracking("done");
+      toast(`Tracking ${repoName}. Re-check it any time from your dashboard.`);
+    } catch (err) {
+      // Already tracked counts as success.
+      if (/already tracking/i.test((err as Error).message)) setTracking("done");
+      else {
+        setTracking("idle");
+        toast((err as Error).message, "error");
+      }
+    }
+  };
 
   const run = async (input: Parameters<typeof checkHealth>[0], docLabel: string | null = null) => {
     setLoading(true);
@@ -81,6 +104,7 @@ const HealthChecker = () => {
     try {
       const res = await checkHealth(input);
       setResult(res);
+      setTracking("idle");
       setWorking(res.markdown ?? "");
       setFirstScore(res.report?.score ?? null);
       setApplied(new Set());
@@ -316,6 +340,32 @@ const HealthChecker = () => {
                       <Wand2 className="h-4 w-4" /> Apply {fixable.length} fix{fixable.length > 1 ? "es" : ""}
                     </button>
                   )}
+                  {result?.source === "repo" && repoName &&
+                    (user ? (
+                      tracking === "done" ? (
+                        <Link
+                          href="/dashboard/repos"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 py-2.5 text-sm text-neutral-200 hover:border-white/30"
+                        >
+                          <Check className="h-4 w-4" /> Tracking · view in dashboard
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={track}
+                          disabled={tracking === "busy"}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 py-2.5 text-sm text-neutral-200 hover:border-white/30 hover:bg-white/[0.04] disabled:opacity-50"
+                        >
+                          {tracking === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />} Track this repo
+                        </button>
+                      )
+                    ) : (
+                      <Link
+                        href={`/signup?next=${encodeURIComponent(`/health?repo=${repoName}`)}`}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-2.5 text-xs text-neutral-400 hover:border-white/30 hover:text-white"
+                      >
+                        Sign up free to track this repo over time
+                      </Link>
+                    ))}
                   <button
                     onClick={openInStudio}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 py-2.5 text-sm text-neutral-200 hover:border-white/30 hover:bg-white/[0.04]"
