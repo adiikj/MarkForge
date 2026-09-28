@@ -112,6 +112,93 @@ export const getQuota = async (): Promise<QuotaStatus | null> => {
   }
 };
 
+export interface RepoProfile {
+  repo: RepoSummary;
+  owner: string;
+  name: string;
+  homepage: string | null;
+  license: { spdxId: string; name: string } | null;
+  ecosystem: string;
+  packageManager: string | null;
+  stack: string[];
+  npmPackage: string | null;
+  pypiPackage: string | null;
+  crateName: string | null;
+  goModule: string | null;
+  ciWorkflows: string[];
+  hasDocker: boolean;
+  licensePath: string | null;
+  contributingPath: string | null;
+  envVars: { key: string; example: string; comment: string | null }[];
+}
+
+export interface DocFile {
+  id: string;
+  path: string;
+  title: string;
+  description: string;
+  content: string;
+  exists: boolean;
+  existingPath: string | null;
+}
+
+export interface DocsPackResult {
+  repo: RepoSummary;
+  files: DocFile[];
+  quota: QuotaStatus;
+}
+
+export type ChangeKind = "breaking" | "added" | "changed" | "deprecated" | "removed" | "fixed" | "security" | "performance" | "docs" | "other";
+
+export interface ChangeEntry {
+  kind: ChangeKind;
+  scope: string | null;
+  subject: string;
+  breaking: boolean;
+  pr: number | null;
+  sha: string;
+  url: string;
+  author: string | null;
+  noise: boolean;
+}
+
+export interface ChangelogRefs {
+  fullName: string;
+  htmlUrl: string;
+  defaultBranch: string;
+  tags: string[];
+}
+
+export interface ChangelogResult {
+  repo: { fullName: string; htmlUrl: string };
+  from: string | null;
+  to: string;
+  commitCount: number;
+  truncated: boolean;
+  entries: ChangeEntry[];
+  quota: QuotaStatus;
+}
+
+export interface DiagramResult {
+  repo: RepoSummary;
+  architecture: string;
+  structure: string;
+  quota: QuotaStatus;
+}
+
+export const getChangelogRefs = (repo: string) => post<ChangelogRefs>("/api/tools/changelog/refs", { repo });
+
+export const generateChangelog = (repo: string, from: string | null, to: string) =>
+  post<ChangelogResult>("/api/tools/changelog", { repo, from, to });
+
+export const generateRepoDiagram = (repo: string) => post<DiagramResult>("/api/tools/diagram", { repo });
+
+export const getRepoProfile = (repo: string, signal?: AbortSignal) =>
+  post<RepoProfile>("/api/tools/repo-profile", { repo }, signal);
+
+export const generateDocsPack = (repo: string, contactEmail?: string, signal?: AbortSignal) =>
+  post<DocsPackResult>("/api/tools/docs-pack", { repo, contactEmail: contactEmail || undefined }, signal);
+
 export const generateReadme = (repo: string, signal?: AbortSignal) =>
   post<GenerateResult>("/api/readme/generate", { repo }, signal);
 

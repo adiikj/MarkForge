@@ -98,7 +98,7 @@ const HealthChecker = () => {
   useEffect(() => {
     const handoff = takeHandoff();
     const repoParam = searchParams.get("repo");
-    if (handoff?.markdown) {
+    if (handoff && "markdown" in handoff && handoff.markdown) {
       setMode(handoff.repo ? "repo" : "paste");
       if (!handoff.repo) setPasteText(handoff.markdown);
       run(handoff.repo ? { repo: handoff.repo, markdown: handoff.markdown } : { markdown: handoff.markdown, kind: "project" }, handoff.label ?? null);

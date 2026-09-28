@@ -2,12 +2,18 @@
 
 const KEY = "markforge:handoff";
 
-export interface Handoff {
-  markdown: string;
-  /** e.g. "owner/repo", shown as the document name. */
-  label?: string;
-  repo?: string;
-}
+export type Handoff =
+  /** Replace the Studio draft. */
+  | {
+      markdown: string;
+      /** e.g. "owner/repo", shown as the document name. */
+      label?: string;
+      repo?: string;
+    }
+  /** Keep the current draft and insert this block under its title (e.g. badges). */
+  | { insertAfterTitle: string; repo?: string }
+  /** Keep the current draft and add this block at the end (e.g. section blocks). */
+  | { append: string; topAnchor?: string; repo?: string };
 
 export const sendHandoff = (h: Handoff) => {
   try {
