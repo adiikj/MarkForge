@@ -21,7 +21,7 @@ const sourceLines: [string, string][][] = [
 
 const Hero: FC = () => {
   return (
-    <section className="relative overflow-hidden bg-[#050505] text-white">
+    <section className="relative overflow-hidden text-white">
       {/* Backdrop: grid + soft glow */}
       <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,black_40%,transparent_100%)]" />
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-white/[0.07] blur-[120px]" />

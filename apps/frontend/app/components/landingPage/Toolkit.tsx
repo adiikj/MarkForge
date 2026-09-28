@@ -110,7 +110,7 @@ const tools: Tool[] = [
   {
     icon: GitBranch,
     title: "Repo → README",
-    description: "Paste a repo link. MarkForge reads the code and drafts install, usage and stack sections.",
+    description: "Paste a repo link. AI reads the code and writes the whole README, grounded in your real commands.",
     status: "live",
     href: "/generate",
     className: "md:row-span-2",
@@ -223,7 +223,7 @@ const ToolCard: FC<{ tool: Tool }> = ({ tool }) => {
 
 const Toolkit: FC = () => {
   return (
-    <section id="toolkit" className="scroll-mt-20 bg-[#050505] py-24 text-white md:py-32">
+    <section id="toolkit" className="scroll-mt-20 py-24 text-white md:py-32">
       <div className="mx-auto max-w-6xl px-5 md:px-8">
         <div className="max-w-2xl">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-neutral-500">The toolkit</p>

@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 import Logo from "../Logo";
+import UserMenu from "../dashboard/UserMenu";
+import { useAuth } from "../../lib/auth";
 
 const tools = [
   { href: "/generate", label: "README Studio", description: "Templates, repo drafts, live preview", icon: PencilLine },
@@ -40,6 +42,7 @@ const Header: FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [scrolled, setScrolled] = useState<boolean>(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const { user, loading } = useAuth();
   const toolsRef = useRef<HTMLDivElement>(null);
 
   // Close the Tools menu on outside click or Escape.
@@ -123,14 +126,30 @@ const Header: FC = () => {
           ))}
         </nav>
 
-        {/* Get Started Button */}
-        <Link
-          href="/generate"
-          className="group hidden items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition-all hover:bg-neutral-200 md:flex"
-        >
-          Get Started
-          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </Link>
+        {/* Account */}
+        <div className="hidden min-w-[160px] items-center justify-end gap-2 md:flex">
+          {loading ? null : user ? (
+            <>
+              <Link href="/dashboard" className="rounded-full px-4 py-2 text-sm text-neutral-300 transition-colors hover:text-white">
+                Dashboard
+              </Link>
+              <UserMenu />
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="rounded-full px-4 py-2 text-sm text-neutral-300 transition-colors hover:text-white">
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="group flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition-all hover:bg-neutral-200"
+              >
+                Sign up
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </>
+          )}
+        </div>
 
         {/* Mobile Menu Toggle */}
         <button
@@ -158,12 +177,20 @@ const Header: FC = () => {
               </a>
             ))}
           </nav>
-          <Link
-            href="/generate"
-            className="mt-5 flex items-center justify-center gap-1.5 rounded-full bg-white py-2.5 text-sm font-medium text-black"
-          >
-            Get Started <ArrowRight className="h-4 w-4" />
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className="mt-5 flex items-center justify-center gap-1.5 rounded-full bg-white py-2.5 text-sm font-medium text-black">
+              Dashboard <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Link href="/login" className="flex items-center justify-center rounded-full border border-white/15 py-2.5 text-sm text-white">
+                Log in
+              </Link>
+              <Link href="/signup" className="flex items-center justify-center gap-1.5 rounded-full bg-white py-2.5 text-sm font-medium text-black">
+                Sign up
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </header>

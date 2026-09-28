@@ -16,7 +16,7 @@ const checks: { ok: boolean; label: string; detail: string }[] = [
 
 const HealthScore: FC = () => {
   return (
-    <section id="health" className="scroll-mt-20 border-y border-white/[0.06] bg-[#080808] py-24 text-white md:py-32">
+    <section id="health" className="scroll-mt-20 border-y border-white/[0.06] bg-white/[0.015] py-24 text-white md:py-32">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 md:grid-cols-2 md:px-8">
         {/* Copy */}
         <div>

@@ -20,7 +20,7 @@ const steps = [
 
 const HowItWorks = () => {
   return (
-    <section id="how-it-works" className="scroll-mt-20 bg-[#050505] py-24 text-white md:py-32">
+    <section id="how-it-works" className="scroll-mt-20 py-24 text-white md:py-32">
       <div className="mx-auto max-w-6xl px-5 md:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-neutral-500">How it works</p>

@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 const CTA: FC = () => {
   return (
-    <section className="bg-[#050505] px-5 pb-24 text-white md:px-8 md:pb-32">
+    <section className="px-5 pb-24 text-white md:px-8 md:pb-32">
       <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a0a] px-6 py-20 text-center md:py-24">
         <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_60%_80%_at_50%_100%,black_30%,transparent_100%)]" />
         <div className="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-[700px] -translate-x-1/2 rounded-full bg-white/10 blur-[100px]" />
