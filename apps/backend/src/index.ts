@@ -1,7 +1,6 @@
-import dotenv from "dotenv";
+// Must be the first import so env vars exist before other modules read them.
+import "dotenv/config";
 import { app } from "./app.js";
-
-dotenv.config();
 
 // connectDB().then(()=>{
 //     app.on("error",()=>{
