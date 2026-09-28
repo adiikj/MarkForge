@@ -35,6 +35,9 @@ app.use("/api/github", githubRoutes);
 import readmeRoutes from "./routes/readme.routes.js";
 app.use("/api/readme", readmeRoutes);
 
+import toolsRoutes from "./routes/tools.routes.js";
+app.use("/api/tools", toolsRoutes);
+
 // import userRouter from './routes/user.routes.js';
 // app.use('/user', userRouter);
 

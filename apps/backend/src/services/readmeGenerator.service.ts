@@ -3,11 +3,11 @@ import type { ProjectProfile } from "./analyzer.service.js";
 // Every section builder returns Markdown starting with its "## " heading (or "" when there is
 // nothing to say), so the health checker can reuse them as one-click fixes.
 
-const TODO = (hint: string) => `<!-- TODO: ${hint} -->`;
+export const TODO = (hint: string) => `<!-- TODO: ${hint} -->`;
 
-const fence = (lang: string, lines: string[]) => ["```" + lang, ...lines, "```"].join("\n");
+export const fence = (lang: string, lines: string[]) => ["```" + lang, ...lines, "```"].join("\n");
 
-const runCmd = (p: ProjectProfile, script: string): string => {
+export const runCmd = (p: ProjectProfile, script: string): string => {
   switch (p.packageManager) {
     case "pnpm":
     case "yarn":
@@ -18,7 +18,7 @@ const runCmd = (p: ProjectProfile, script: string): string => {
   }
 };
 
-const installCmds = (p: ProjectProfile): string[] => {
+export const installCmds = (p: ProjectProfile): string[] => {
   switch (p.packageManager) {
     case "pnpm":
     case "yarn":
@@ -53,7 +53,7 @@ const installCmds = (p: ProjectProfile): string[] => {
   }
 };
 
-const devCmds = (p: ProjectProfile): string[] => {
+export const devCmds = (p: ProjectProfile): string[] => {
   if (p.ecosystem === "node") {
     const dev = p.scripts.find((s) => s.name === "dev") ?? p.scripts.find((s) => s.name === "start");
     return dev ? [runCmd(p, dev.name)] : [];
@@ -80,7 +80,7 @@ const devCmds = (p: ProjectProfile): string[] => {
   }
 };
 
-const prereqs = (p: ProjectProfile): string[] => {
+export const prereqs = (p: ProjectProfile): string[] => {
   const list: string[] = [];
   if (p.ecosystem === "node") {
     list.push("[Node.js](https://nodejs.org/) 20 or later");

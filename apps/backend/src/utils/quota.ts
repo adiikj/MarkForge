@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { ApiError } from "./ApiError.js";
 
 // Free-tier usage limits, counted per client IP per UTC day.
 // In-memory: resets on restart and isn't shared across instances. Move to MongoDB/Redis
@@ -52,4 +53,12 @@ export const consumeQuota = (req: Request, kind: QuotaKind): QuotaStatus => {
   const key = clientKey(req, kind);
   usage.set(key, (usage.get(key) ?? 0) + 1);
   return getQuota(req, kind);
+};
+
+/** Throws 429 QUOTA_EXCEEDED when the free daily allowance for `kind` is used up. */
+export const assertQuota = (req: Request, kind: QuotaKind): void => {
+  const q = getQuota(req, kind);
+  if (q.remaining <= 0) {
+    throw new ApiError(429, `You've used all ${q.limit} free repo drafts for today.`, [{ code: "QUOTA_EXCEEDED", ...q }]);
+  }
 };

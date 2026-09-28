@@ -22,6 +22,12 @@ export interface ProjectProfile {
   hasCI: boolean;
   /** First GitHub Actions workflow file name, for a status badge. */
   ciWorkflow: string | null;
+  /** All GitHub Actions workflow file names. */
+  ciWorkflows: string[];
+  /** Published package identifiers outside npm, for registry badges. */
+  pypiPackage: string | null;
+  crateName: string | null;
+  goModule: string | null;
   hasDocker: boolean;
   hasCompose: boolean;
   communityFiles: { contributing: boolean; codeOfConduct: boolean; security: boolean; license: boolean; changelog: boolean };
@@ -157,6 +163,15 @@ const addStack = (stack: Set<string>, deps: Iterable<string>, table: Record<stri
   }
 };
 
+/** Stack names detected from a single package.json (used for per-workspace diagrams). */
+export const stackFromPackageJson = (text: string): string[] => {
+  const pkg = parseJson<PackageJson>(text);
+  if (!pkg) return [];
+  const stack = new Set<string>();
+  addStack(stack, Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }), NODE_STACK);
+  return [...stack];
+};
+
 export const parseEnvExample = (text: string): ProjectProfile["envVars"] => {
   const vars: ProjectProfile["envVars"] = [];
   let pendingComment: string | null = null;
@@ -268,8 +283,14 @@ export const analyzeRepo = (snapshot: RepoSnapshot): ProjectProfile => {
   const hasCompose = has("docker-compose.yml") || has("compose.yml");
   if (hasDocker || hasCompose) stack.add("Docker");
 
-  const ciWorkflow =
-    paths.find((p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p))?.replace(".github/workflows/", "") ?? null;
+  const ciWorkflows = paths
+    .filter((p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p))
+    .map((p) => p.replace(".github/workflows/", ""));
+  const ciWorkflow = ciWorkflows[0] ?? null;
+
+  const pypiPackage = files["pyproject.toml"]?.match(/^\s*name\s*=\s*["']([^"']+)["']/m)?.[1] ?? null;
+  const crateName = files["Cargo.toml"]?.match(/\[package\][^[]*?^\s*name\s*=\s*["']([^"']+)["']/ms)?.[1] ?? null;
+  const goModule = files["go.mod"]?.match(/^module\s+(\S+)/m)?.[1] ?? null;
 
   const envFile = files[".env.example"] ?? files[".env.sample"];
 
@@ -290,6 +311,10 @@ export const analyzeRepo = (snapshot: RepoSnapshot): ProjectProfile => {
       scripts.some((s) => s.name === "test"),
     hasCI: ciWorkflow !== null,
     ciWorkflow,
+    ciWorkflows,
+    pypiPackage,
+    crateName,
+    goModule,
     hasDocker,
     hasCompose,
     licensePath: paths.find((p) => /^licen[cs]e(\.md|\.txt)?$/i.test(p)) ?? null,

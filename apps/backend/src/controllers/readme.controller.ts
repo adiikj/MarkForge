@@ -2,41 +2,14 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { findReadme, getRepoSnapshot, parseRepoUrl, type RepoSnapshot } from "../services/github.service.js";
+import { findReadme } from "../services/github.service.js";
+import { loadSnapshot, repoSummary } from "../services/snapshotCache.service.js";
 import { analyzeRepo } from "../services/analyzer.service.js";
 import { generateReadme } from "../services/readmeGenerator.service.js";
 import { checkReadme } from "../services/healthCheck.service.js";
-import { consumeQuota, getQuota } from "../utils/quota.js";
+import { assertQuota, consumeQuota, getQuota } from "../utils/quota.js";
 
 const MAX_MARKDOWN_CHARS = 200_000;
-
-// Short-lived cache so "check → generate → check again" on one repo costs a single GitHub round-trip.
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const CACHE_MAX = 100;
-const snapshotCache = new Map<string, { at: number; snapshot: RepoSnapshot }>();
-
-const loadSnapshot = async (repoInput: unknown): Promise<RepoSnapshot> => {
-  if (typeof repoInput !== "string" || !repoInput.trim()) {
-    throw new ApiError(400, "Provide a repository link or owner/repo.");
-  }
-  const { owner, repo } = parseRepoUrl(repoInput);
-  const key = `${owner}/${repo}`.toLowerCase();
-  const hit = snapshotCache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.snapshot;
-
-  const snapshot = await getRepoSnapshot(owner, repo);
-  if (snapshotCache.size >= CACHE_MAX) snapshotCache.delete(snapshotCache.keys().next().value!);
-  snapshotCache.set(key, { at: Date.now(), snapshot });
-  return snapshot;
-};
-
-const repoSummary = (snapshot: RepoSnapshot) => ({
-  fullName: snapshot.meta.fullName,
-  htmlUrl: snapshot.meta.htmlUrl,
-  description: snapshot.meta.description,
-  stars: snapshot.meta.stars,
-  defaultBranch: snapshot.meta.defaultBranch,
-});
 
 /** GET /api/readme/quota */
 export const quotaStatus = asyncHandler(async (req: Request, res: Response) => {
@@ -45,12 +18,7 @@ export const quotaStatus = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /api/readme/generate  { repo } */
 export const generateFromRepo = asyncHandler(async (req: Request, res: Response) => {
-  const before = getQuota(req, "generate");
-  if (before.remaining <= 0) {
-    throw new ApiError(429, `You've used all ${before.limit} free repo READMEs for today.`, [
-      { code: "QUOTA_EXCEEDED", ...before },
-    ]);
-  }
+  assertQuota(req, "generate");
 
   const snapshot = await loadSnapshot(req.body?.repo);
   const profile = analyzeRepo(snapshot);

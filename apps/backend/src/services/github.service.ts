@@ -186,3 +186,74 @@ export const findReadme = (snapshot: RepoSnapshot): { path: string; content: str
   const { readmePath, files } = snapshot;
   return readmePath && files[readmePath] !== undefined ? { path: readmePath, content: files[readmePath] } : null;
 };
+
+export interface RawCommit {
+  sha: string;
+  message: string;
+  url: string;
+  date: string | null;
+  author: string | null;
+}
+
+const toRawCommit = (c: {
+  sha: string;
+  html_url: string;
+  commit: { message: string; author?: { date?: string; name?: string } | null };
+  author?: { login?: string } | null;
+}): RawCommit => ({
+  sha: c.sha,
+  message: c.commit.message,
+  url: c.html_url,
+  date: c.commit.author?.date ?? null,
+  author: c.author?.login ?? c.commit.author?.name ?? null,
+});
+
+/** Default branch plus the most recent tags (newest first). Two API calls. */
+export const getRefs = async (owner: string, repo: string) => {
+  const fullName = `${owner}/${repo}`;
+  try {
+    const [{ data: r }, { data: tags }] = await Promise.all([
+      github.get(`/repos/${owner}/${repo}`),
+      github.get(`/repos/${owner}/${repo}/tags`, { params: { per_page: 50 } }),
+    ]);
+    return {
+      fullName: r.full_name as string,
+      htmlUrl: r.html_url as string,
+      defaultBranch: r.default_branch as string,
+      tags: (tags as { name: string }[]).map((t) => t.name),
+    };
+  } catch (error) {
+    throw toApiError(error, fullName);
+  }
+};
+
+/**
+ * Commits in `head` that aren't in `base`, oldest first. With no base, the latest 100 commits.
+ * GitHub's compare endpoint returns at most 250 commits.
+ */
+export const getCommitRange = async (
+  owner: string,
+  repo: string,
+  base: string | null,
+  head: string
+): Promise<{ commits: RawCommit[]; truncated: boolean }> => {
+  const fullName = `${owner}/${repo}`;
+  try {
+    if (!base) {
+      const { data } = await github.get(`/repos/${owner}/${repo}/commits`, { params: { sha: head, per_page: 100 } });
+      return { commits: (data as Parameters<typeof toRawCommit>[0][]).map(toRawCommit).reverse(), truncated: data.length === 100 };
+    }
+    const { data } = await github.get(
+      `/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+      { params: { per_page: 250 } }
+    );
+    return {
+      commits: (data.commits as Parameters<typeof toRawCommit>[0][]).map(toRawCommit),
+      truncated: data.total_commits > data.commits.length,
+    };
+  } catch (error) {
+    const err = toApiError(error, fullName);
+    if (err.statusCode === 404) return Promise.reject(new ApiError(404, `Couldn't compare ${base ?? "start"}…${head}. Check that both refs exist.`));
+    throw err;
+  }
+};
