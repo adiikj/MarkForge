@@ -8,6 +8,13 @@ const columns = [
     links: [
       { label: "README Studio", href: "/generate" },
       { label: "Health Score", href: "/health" },
+      { label: "Section Blocks", href: "/blocks" },
+      { label: "Badge Builder", href: "/badges" },
+      { label: "Repo Docs Pack", href: "/docs-pack" },
+      { label: "Changelog", href: "/changelog" },
+      { label: "Table Editor", href: "/table" },
+      { label: "Mermaid Diagrams", href: "/diagrams" },
+      { label: "Converters", href: "/convert" },
       { label: "Toolkit", href: "/#toolkit" },
       { label: "Pricing", href: "/pricing" },
     ],

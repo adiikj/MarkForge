@@ -33,7 +33,7 @@ const Hero: FC = () => {
           className="animate-fade-up group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pl-1 pr-3 text-xs text-neutral-400 transition-colors hover:border-white/20 hover:text-neutral-200"
         >
           <span className="rounded-full bg-white px-2 py-0.5 font-medium text-black">New</span>
-          New: Repo → README and Health Score are live
+          New: Changelogs, tables, diagrams and converters
           <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
         </a>
 

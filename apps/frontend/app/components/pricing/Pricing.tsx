@@ -26,11 +26,11 @@ const plans: Plan[] = [
     tagline: "Everything you need for your own repos.",
     price: { monthly: 0, yearly: 0 },
     features: [
-      `${FREE_REPO_READMES} repo → README drafts per day`,
-      "Unlimited templates and editing",
-      "Health Score on any public repo",
-      "One-click fixes",
-      "Download and copy",
+      `${FREE_REPO_READMES} repo drafts per day (README, docs pack, changelog or diagram)`,
+      "Unlimited templates, editing and section blocks",
+      "Health Score with one-click fixes",
+      "Badge Builder and Table Editor",
+      "Converters: Docs, Notion, HTML, CSV",
     ],
     cta: { label: "Start free", href: "/generate" },
   },
@@ -39,12 +39,10 @@ const plans: Plan[] = [
     tagline: "For people who ship a lot of repos.",
     price: { monthly: 6, yearly: 60 },
     features: [
-      "Unlimited repo → README drafts",
+      "Unlimited repo drafts",
       "Private repositories",
-      "Badge builder and section blocks",
-      "Repo docs pack: CONTRIBUTING, SECURITY and more",
-      "Changelog generator",
       "Saved drafts across devices",
+      "Priority GitHub rate limits",
     ],
     cta: { label: "Coming soon" },
     highlight: true,
@@ -69,12 +67,11 @@ const plans: Plan[] = [
 
 type Cell = boolean | string;
 const comparison: { feature: string; values: [Cell, Cell, Cell] }[] = [
-  { feature: "Repo → README drafts", values: [`${FREE_REPO_READMES} / day`, "Unlimited", "Unlimited"] },
-  { feature: "Templates and live editor", values: [true, true, true] },
+  { feature: "Repo drafts (README, docs pack, changelog, diagram)", values: [`${FREE_REPO_READMES} / day`, "Unlimited", "Unlimited"] },
+  { feature: "Templates, live editor and section blocks", values: [true, true, true] },
   { feature: "Health Score and one-click fixes", values: [true, true, true] },
+  { feature: "Badges, tables, diagrams and converters", values: [true, true, true] },
   { feature: "Private repositories", values: [false, true, true] },
-  { feature: "Badge builder and section blocks", values: [false, true, true] },
-  { feature: "Repo docs pack and changelogs", values: [false, true, true] },
   { feature: "Saved drafts across devices", values: [false, true, true] },
   { feature: "Shared team templates", values: [false, false, true] },
   { feature: "GitHub App fix PRs", values: [false, false, true] },
@@ -83,7 +80,7 @@ const comparison: { feature: string; values: [Cell, Cell, Cell] }[] = [
 const faqs = [
   {
     q: "What counts toward the free limit?",
-    a: `Only successful repo → README drafts, ${FREE_REPO_READMES} per day, reset at midnight UTC. Templates, editing, downloading and Health Score checks don't count.`,
+    a: `Successful repo drafts (a README, docs pack, changelog or repo diagram generated from a repo), ${FREE_REPO_READMES} per day, reset at midnight UTC. Templates, blocks, badges, tables, converters, editing and Health Score checks don't count.`,
   },
   {
     q: "When do Pro and Team launch?",
@@ -126,8 +123,8 @@ const Pricing = () => {
             <span className="text-neutral-500">Pro when you ship more.</span>
           </h1>
           <p className="mt-5 text-neutral-400">
-            The Studio, templates and Health Score are free. Pro lifts the daily limit on repo drafts and
-            adds the rest of the toolkit.
+            The Studio, Health Score, badges and docs pack are free. Pro lifts the daily limit on repo
+            drafts and adds private repos.
           </p>
 
           <div className="mt-8 inline-flex items-center rounded-full border border-white/10 p-1">
