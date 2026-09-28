@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
@@ -12,17 +11,29 @@ import {
   Eye,
   FileText,
   Gauge,
+  LayoutGrid,
   PencilLine,
   Sparkles,
   X,
-  Zap,
 } from "lucide-react";
 import Preview from "./Preview";
 import Editor from "./Editor";
+import BlocksPanel from "./BlocksPanel";
 import RepoInput from "../RepoInput";
+import QuotaNotice, { QuotaChip } from "../shared/QuotaNotice";
 import { templates, type Template } from "./templates";
-import { ApiRequestError, generateReadme, getQuota, type GenerateResult, type QuotaStatus } from "../../lib/api";
+import {
+  ApiRequestError,
+  generateReadme,
+  getQuota,
+  getRepoProfile,
+  type GenerateResult,
+  type QuotaStatus,
+  type RepoProfile,
+} from "../../lib/api";
+import type { Block } from "../../lib/blocks";
 import { sendHandoff, takeHandoff } from "../../lib/handoff";
+import { applyOp } from "../../lib/applyFix";
 
 const DRAFT_KEY = "markforge:draft";
 const LOADING_STEPS = ["Reading repository…", "Detecting the stack…", "Drafting sections…"];
@@ -63,6 +74,10 @@ const Main = () => {
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
+  const [blocksOpen, setBlocksOpen] = useState(false);
+  const [profile, setProfile] = useState<RepoProfile | null>(null);
+  // Until the user places the caret, blocks go at the end rather than position 0.
+  const caretTouched = useRef(false);
 
   const load = (markdown: string, nextLabel: string, nextRepo: string | null = null) => {
     setContent(markdown);
@@ -102,8 +117,23 @@ const Main = () => {
     const handoff = takeHandoff();
     const repoParam = searchParams.get("repo");
     const draft = loadDraft();
-    if (handoff) {
+    if (handoff && "markdown" in handoff) {
       load(handoff.markdown, handoff.label ?? "README.md", handoff.repo ?? null);
+    } else if (handoff && "append" in handoff) {
+      const base = draft?.markdown ?? "";
+      let next = applyOp(base, { type: "append", content: handoff.append });
+      if (handoff.topAnchor && !next.includes(handoff.topAnchor)) next = `${handoff.topAnchor}\n${next}`;
+      setContent(next);
+      setBaseline(base);
+      setLabel(draft?.label ?? "README.md");
+      setRepo(draft?.repo ?? handoff.repo ?? null);
+    } else if (handoff && "insertAfterTitle" in handoff) {
+      const base = draft?.markdown ?? "";
+      const next = applyOp(base, { type: "afterTitle", content: handoff.insertAfterTitle });
+      setContent(next);
+      setBaseline(base);
+      setLabel(draft?.label ?? "README.md");
+      setRepo(draft?.repo ?? handoff.repo ?? null);
     } else if (repoParam) {
       forge(repoParam, true);
     } else if (draft?.markdown) {
@@ -114,6 +144,7 @@ const Main = () => {
     } else {
       load(templates[0].content, `${templates[0].name} template`);
     }
+    if (searchParams.get("blocks")) setBlocksOpen(true);
     setReady(true);
     getQuota().then((q) => {
       if (!q) return;
@@ -178,6 +209,51 @@ const Main = () => {
     router.replace("/generate", { scroll: false });
   };
 
+  // Once the editor has been focused its caret position is meaningful for inserting blocks.
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const onFocus = () => (caretTouched.current = true);
+    el.addEventListener("focus", onFocus);
+    return () => el.removeEventListener("focus", onFocus);
+  }, []);
+
+  // Section blocks fill in repo details (stack, env vars, license) when the draft came from a repo.
+  useEffect(() => {
+    if (!blocksOpen || !repo || profile?.repo.fullName.toLowerCase() === repo.toLowerCase()) return;
+    getRepoProfile(repo).then(setProfile).catch(() => setProfile(null));
+  }, [blocksOpen, repo, profile]);
+
+  const toggleBlocks = () => {
+    setBlocksOpen((o) => !o);
+    if (view === "preview") setView("split");
+  };
+
+  const insertBlock = (block: Block) => {
+    const el = editorRef.current;
+    let pos = el && caretTouched.current ? el.selectionEnd : content.length;
+    // Snap to the end of the current line so a block never splits a line.
+    const eol = content.indexOf("\n", pos);
+    if (pos > 0 && content[pos - 1] !== "\n") pos = eol === -1 ? content.length : eol;
+
+    const text = block.build({ repo, profile, markdown: content }).trim();
+    const before = content.slice(0, pos).replace(/\s*$/, "");
+    const after = content.slice(pos).replace(/^\s*/, "");
+    let next = [before, text, after].filter(Boolean).join("\n\n") + (after ? "" : "\n");
+    let caret = (before ? before.length + 2 : 0) + text.length;
+    if (block.topAnchor && !content.includes(block.topAnchor)) {
+      next = `${block.topAnchor}\n${next}`;
+      caret += block.topAnchor.length + 1;
+    }
+    setContent(next);
+    requestAnimationFrame(() => {
+      if (!editorRef.current || editorRef.current.offsetParent === null) return;
+      editorRef.current.focus();
+      editorRef.current.setSelectionRange(caret, caret);
+      caretTouched.current = true;
+    });
+  };
+
   const checkHealth = () => {
     sendHandoff({ markdown: content, label, repo: repo ?? undefined });
     router.push("/health?from=studio");
@@ -214,12 +290,9 @@ const Main = () => {
             <div className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="h-4 w-4 text-neutral-400" /> From a repository
               {quota && (
-                <Link
-                  href="/pricing"
-                  className="ml-auto rounded-full border border-white/10 px-2.5 py-0.5 font-mono text-[11px] font-normal text-neutral-400 transition-colors hover:border-white/25 hover:text-white"
-                >
-                  {quota.remaining} of {quota.limit} free today
-                </Link>
+                <span className="ml-auto">
+                  <QuotaChip remaining={quota.remaining} limit={quota.limit} />
+                </span>
               )}
             </div>
             <p className="mt-1 text-xs text-neutral-500">Reads package files, scripts, env vars and structure. Public repos only.</p>
@@ -233,20 +306,8 @@ const Main = () => {
               </p>
             )}
             {quotaHit && !loading && (
-              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/20 bg-gradient-to-r from-white/[0.08] to-transparent px-4 py-3">
-                <Zap className="h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1 text-sm">
-                  <p className="font-medium">You&apos;ve used today&apos;s free repo drafts.</p>
-                  <p className="text-xs text-neutral-400">
-                    Resets at midnight UTC. Templates and editing stay unlimited.
-                  </p>
-                </div>
-                <Link
-                  href="/pricing"
-                  className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-neutral-200"
-                >
-                  See Pro
-                </Link>
+              <div className="mt-3">
+                <QuotaNotice />
               </div>
             )}
             {error && (
@@ -333,6 +394,15 @@ const Main = () => {
 
             <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
               <button
+                onClick={toggleBlocks}
+                aria-pressed={blocksOpen}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                  blocksOpen ? "border-white/40 bg-white/10 text-white" : "border-white/10 text-neutral-300 hover:border-white/25 hover:text-white"
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Blocks</span>
+              </button>
+              <button
                 onClick={checkHealth}
                 disabled={!content.trim()}
                 className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-white/25 hover:text-white disabled:opacity-40"
@@ -356,17 +426,35 @@ const Main = () => {
           </div>
 
           {/* Panes */}
-          <div className="relative grid h-[calc(100vh-9rem)] min-h-[520px] lg:grid-cols-2">
+          <div className="relative flex h-[calc(100vh-9rem)] min-h-[520px]">
+            {blocksOpen && (
+              <div className="absolute inset-0 z-20 lg:static lg:z-auto lg:w-64 lg:shrink-0 lg:border-r lg:border-white/10">
+                <BlocksPanel
+                  context={{ repo, profile, markdown: content }}
+                  onInsert={(b) => {
+                    insertBlock(b);
+                    // On small screens the panel covers the editor; close it so the result is visible.
+                    if (window.matchMedia("(max-width: 1023px)").matches) setBlocksOpen(false);
+                  }}
+                  onClose={() => setBlocksOpen(false)}
+                />
+              </div>
+            )}
             <div
-              className={`min-h-0 min-w-0 ${view === "preview" ? "hidden" : "block"} ${
-                view === "split" ? "lg:border-r lg:border-white/10" : "lg:col-span-2"
+              className={`min-h-0 min-w-0 flex-1 ${view === "preview" ? "hidden" : "block"} ${
+                view === "split" ? "lg:border-r lg:border-white/10" : ""
               }`}
             >
-              <Editor ref={editorRef} content={content} onChange={setContent} onCursor={(line, col) => setCursor({ line, col })} />
+              <Editor
+                ref={editorRef}
+                content={content}
+                onChange={setContent}
+                onCursor={(line, col) => setCursor({ line, col })}
+              />
             </div>
             <div
-              className={`min-h-0 min-w-0 overflow-auto bg-[#070707] ${
-                view === "write" ? "hidden" : view === "split" ? "hidden lg:block" : "block lg:col-span-2"
+              className={`min-h-0 min-w-0 flex-1 overflow-auto bg-[#070707] ${
+                view === "write" ? "hidden" : view === "split" ? "hidden lg:block" : "block"
               }`}
             >
               <div className={`px-6 py-8 sm:px-10 ${view === "preview" ? "mx-auto max-w-4xl" : ""}`}>
