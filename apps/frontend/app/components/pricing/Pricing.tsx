@@ -26,13 +26,14 @@ const plans: Plan[] = [
     tagline: "Everything you need for your own repos.",
     price: { monthly: 0, yearly: 0 },
     features: [
-      `${FREE_REPO_READMES} repo drafts per day (README, docs pack, changelog or diagram)`,
+      `${FREE_REPO_READMES} repo drafts/day signed out, 5 with a free account`,
+      "Save up to 25 documents and track 10 repos",
       "Unlimited templates, editing and section blocks",
       "Health Score with one-click fixes",
       "Badge Builder and Table Editor",
       "Converters: Docs, Notion, HTML, CSV",
     ],
-    cta: { label: "Start free", href: "/generate" },
+    cta: { label: "Create free account", href: "/signup" },
   },
   {
     name: "Pro",
@@ -41,7 +42,7 @@ const plans: Plan[] = [
     features: [
       "Unlimited repo drafts",
       "Private repositories",
-      "Saved drafts across devices",
+      "1,000 saved documents, 200 tracked repos",
       "Priority GitHub rate limits",
     ],
     cta: { label: "Coming soon" },
@@ -67,12 +68,13 @@ const plans: Plan[] = [
 
 type Cell = boolean | string;
 const comparison: { feature: string; values: [Cell, Cell, Cell] }[] = [
-  { feature: "Repo drafts (README, docs pack, changelog, diagram)", values: [`${FREE_REPO_READMES} / day`, "Unlimited", "Unlimited"] },
+  { feature: "Repo drafts (README, docs pack, changelog, diagram)", values: ["5 / day", "Unlimited", "Unlimited"] },
+  { feature: "Saved documents", values: ["25", "1,000", "5,000"] },
+  { feature: "Tracked repos with score history", values: ["10", "200", "1,000"] },
   { feature: "Templates, live editor and section blocks", values: [true, true, true] },
   { feature: "Health Score and one-click fixes", values: [true, true, true] },
   { feature: "Badges, tables, diagrams and converters", values: [true, true, true] },
   { feature: "Private repositories", values: [false, true, true] },
-  { feature: "Saved drafts across devices", values: [false, true, true] },
   { feature: "Shared team templates", values: [false, false, true] },
   { feature: "GitHub App fix PRs", values: [false, false, true] },
 ];
@@ -80,7 +82,7 @@ const comparison: { feature: string; values: [Cell, Cell, Cell] }[] = [
 const faqs = [
   {
     q: "What counts toward the free limit?",
-    a: `Successful repo drafts (a README, docs pack, changelog or repo diagram generated from a repo), ${FREE_REPO_READMES} per day, reset at midnight UTC. Templates, blocks, badges, tables, converters, editing and Health Score checks don't count.`,
+    a: `Successful repo drafts (a README, docs pack, changelog or repo diagram generated from a repo): ${FREE_REPO_READMES} per day signed out, 5 with a free account, reset at midnight UTC. Templates, blocks, badges, tables, converters, editing and Health Score checks don't count.`,
   },
   {
     q: "When do Pro and Team launch?",
@@ -88,7 +90,7 @@ const faqs = [
   },
   {
     q: "Do you store my README or code?",
-    a: "No. MarkForge reads public repo files from GitHub to draft your README, and your drafts live in your own browser.",
+    a: "MarkForge reads public repo files from GitHub to draft your README and doesn't keep your code. Drafts stay in your browser unless you save them to your account, and you can delete your account and everything in it from Settings at any time.",
   },
   {
     q: "Can I use generated READMEs commercially?",
