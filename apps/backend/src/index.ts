@@ -17,6 +17,9 @@ import { app } from "./app.js";
 //     throw error;
 // });
 
-app.listen(process.env.PORT, () => {
-  console.log(`Server running on port ${process.env.PORT}`);
+// Defaults to 8000, which is where the frontend looks when NEXT_PUBLIC_API_URL is unset.
+const port = Number(process.env.PORT) || 8000;
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
